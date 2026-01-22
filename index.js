@@ -1,46 +1,44 @@
 const express = require('express');
 const cors = require('cors');
+const { Cashfree } = require('cashfree-pg');
 
 const app = express();
-app.use(cors());
+app.use(cors()); // CORS এখন Express হ্যান্ডেল করছে, Vercel নয়।
 app.use(express.json());
 
-app.get('/', (req, res) => {
-    // চেক করা হচ্ছে Key গুলো সার্ভার পাচ্ছে কিনা
-    const appIdStatus = process.env.APP_ID ? "✅ Found" : "❌ Missing";
-    const secretKeyStatus = process.env.SECRET_KEY ? "✅ Found" : "❌ Missing";
+// Cashfree কনফিগারেশন
+Cashfree.XClientId = process.env.APP_ID;
+Cashfree.XClientSecret = process.env.SECRET_KEY;
+Cashfree.XEnvironment = Cashfree.Environment.PRODUCTION;
 
-    res.send(`
-        <h1>Server Status Check</h1>
-        <p><b>Server:</b> Running</p>
-        <p><b>APP_ID:</b> ${appIdStatus}</p>
-        <p><b>SECRET_KEY:</b> ${secretKeyStatus}</p>
-        <hr>
-        <p>If keys are missing, go to Vercel Settings > Environment Variables to add them.</p>
-    `);
+// CORS Pre-flight Request হ্যান্ডেল করা (খুব জরুরি)
+app.options('*', cors());
+
+// সার্ভার চালু আছে কি না চেক করার জন্য হোমপেজ
+app.get('/', (req, res) => {
+    res.status(200).send("Cashfree API is READY! (Universal CORS)");
 });
 
+// পেমেন্ট অর্ডার তৈরি করার এপিআই
 app.post('/create-order', async (req, res) => {
     try {
-        // এখানে লাইব্রেরি ইম্পোর্ট করা হচ্ছে যাতে ক্র্যাশ না করে
-        const { Cashfree } = require('cashfree-pg');
+        // ... (বাকি কোড আগের মতই থাকবে)
 
-        // লাইব্রেরি কনফিগারেশন
-        Cashfree.XClientId = process.env.APP_ID;
-        Cashfree.XClientSecret = process.env.SECRET_KEY;
-        Cashfree.XEnvironment = Cashfree.Environment.PRODUCTION;
+        // যদি আপনার Blogspot এ কাজ না করে, তবে এই লাইনটি কমেন্ট করুন।
+        // Cashfree.PGCreateOrder("2023-08-01", request);
 
+        // Debug করার জন্য শুধু সেশন আইডি পাঠান।
+        // res.json({ payment_session_id: "Debug_ID_123" });
+
+        // ... (বাকি কোড)
         const { amount } = req.body;
-        
         const request = {
             order_amount: parseFloat(amount),
             order_currency: "INR",
             order_id: "ORD_" + Date.now(),
             customer_details: {
                 customer_id: "CUST_" + Date.now(),
-                customer_phone: "9999999999",
-                customer_name: "Subscriber",
-                customer_email: "test@example.com"
+                customer_phone: "9999999999"
             },
             order_meta: {
                 return_url: "https://nitaistudio.github.io/DutyTrackerPro/?order_id={order_id}"
@@ -48,15 +46,9 @@ app.post('/create-order', async (req, res) => {
         };
 
         const response = await Cashfree.PGCreateOrder("2023-08-01", request);
-        res.json(response.data);
-
-    } catch (error) {
-        console.error("Payment Error:", error);
-        res.status(500).json({ 
-            error: "Payment Failed", 
-            details: error.message,
-            tip: "Check Vercel Logs for more info" 
-        });
+        res.status(200).json(response.data);
+    } catch (err) {
+        res.status(500).json({ error: "Server Error! " + err.message });
     }
 });
 
