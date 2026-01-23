@@ -3,7 +3,14 @@ const cors = require('cors');
 const { Cashfree } = require('cashfree-pg');
 
 const app = express();
-app.use(cors()); // CORS এখন Express হ্যান্ডেল করছে, Vercel নয়।
+
+// 🚀 সলিউশন: সব ওয়েবসাইটকে পারমিশন দেওয়া হলো (CORS Fix)
+app.use(cors({
+    origin: '*', 
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json());
 
 // Cashfree কনফিগারেশন
@@ -11,44 +18,42 @@ Cashfree.XClientId = process.env.APP_ID;
 Cashfree.XClientSecret = process.env.SECRET_KEY;
 Cashfree.XEnvironment = Cashfree.Environment.PRODUCTION;
 
-// CORS Pre-flight Request হ্যান্ডেল করা (খুব জরুরি)
-app.options('*', cors());
-
-// সার্ভার চালু আছে কি না চেক করার জন্য হোমপেজ
+// ✅ সার্ভার চেক করার রুট
 app.get('/', (req, res) => {
-    res.status(200).send("Cashfree API is READY! (Universal CORS)");
+    const keyCheck = process.env.APP_ID ? "Active" : "Missing";
+    res.status(200).send(`Server is RUNNING! Keys: ${keyCheck}`);
 });
 
-// পেমেন্ট অর্ডার তৈরি করার এপিআই
+// 💳 পেমেন্ট তৈরি করার রুট
 app.post('/create-order', async (req, res) => {
     try {
-        // ... (বাকি কোড আগের মতই থাকবে)
-
-        // যদি আপনার Blogspot এ কাজ না করে, তবে এই লাইনটি কমেন্ট করুন।
-        // Cashfree.PGCreateOrder("2023-08-01", request);
-
-        // Debug করার জন্য শুধু সেশন আইডি পাঠান।
-        // res.json({ payment_session_id: "Debug_ID_123" });
-
-        // ... (বাকি কোড)
         const { amount } = req.body;
+
         const request = {
             order_amount: parseFloat(amount),
             order_currency: "INR",
-            order_id: "ORD_" + Date.now(),
+            order_id: "SUB_" + Date.now(),
             customer_details: {
-                customer_id: "CUST_" + Date.now(),
-                customer_phone: "9999999999"
+                customer_id: "USER_" + Date.now(),
+                customer_phone: "9999999999",
+                customer_name: "Subscriber",
+                customer_email: "user@example.com"
             },
             order_meta: {
-                return_url: "https://nitaistudio.github.io/DutyTrackerPro/?order_id={order_id}"
+                // পেমেন্ট শেষে যেখানে ফিরে আসবে
+                return_url: "https://nitaistudio.github.io/DutyTrackerPro/?status=success"
             }
         };
 
         const response = await Cashfree.PGCreateOrder("2023-08-01", request);
         res.status(200).json(response.data);
-    } catch (err) {
-        res.status(500).json({ error: "Server Error! " + err.message });
+
+    } catch (error) {
+        console.error("Cashfree Error:", error.response?.data || error.message);
+        res.status(500).json({ 
+            error: "Payment Creation Failed", 
+            details: error.message 
+        });
     }
 });
 
